@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.Serialization;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -42,9 +43,9 @@ namespace Stormancer.Raft.WAL
         public uint MaxRecordSize { get; set; } = 1024 * 1024;
         public uint SegmentSize { get; set; } = 16 * 1024 * 1024;
         public uint PageSize { get; set; } = 8 * 1024;
-        public IStorageProvider? Storage { get; set; }
+        public required IWALSegmentProvider Storage { get; set; }
     }
-    internal class Log : IAsyncDisposable
+    internal class WriteAheadLog : IAsyncDisposable
     {
         private object _lock = new object();
         private readonly string _category;
@@ -52,10 +53,10 @@ namespace Stormancer.Raft.WAL
         private IWALSegment _currentSegment;
         private readonly LogMetadata _metadata;
        
-        private IStorageProvider _storageProvider;
+        private IWALSegmentProvider _segmentProvider;
         private Dictionary<int, IWALSegment> _openedSegments = new Dictionary<int, IWALSegment>();
 
-        public Log(string category, LogOptions options, LogMetadata metadata)
+        public WriteAheadLog(string category, LogOptions options, LogMetadata metadata)
         {
             if (options.Storage == null)
             {
@@ -64,7 +65,8 @@ namespace Stormancer.Raft.WAL
             _category = category;
             _options = options;
             _metadata = metadata;
-            _storageProvider = _options.Storage;
+            _segmentProvider = _options.Storage;
+            _currentSegment = LoadSegment(_metadata.CurrentSegmentId);
         }
 
 
@@ -100,7 +102,6 @@ namespace Stormancer.Raft.WAL
 
             var segment = GetSegment(firstEntryId);
 
-            TLogEntry? lastEntry;
             var result = await segment.GetEntries<TLogEntry>(firstEntryId, lastEntryId);
 
             return new GetEntriesResult<TLogEntry>(prevLogEntryId, prevLogEntryTerm, result.FirstEntryId, result.LastEntryId, result.Entries, result);
@@ -116,24 +117,32 @@ namespace Stormancer.Raft.WAL
             {
                 while (!segment.TryAppendEntry(entry))
                 {
-                    segment = CreateNewSegmentIfFull();
+                    segment = CreateNewSegmentIfRequired(segment);
                 }
             }
         }
 
-        private IWALSegment CreateNewSegmentIfFull()
+        private IWALSegment CreateNewSegmentIfRequired(IWALSegment expectedSegment)
         {
+            
+            if(_currentSegment != expectedSegment)
+            {
+                return _currentSegment;
+            }
+
             lock (_lock)
             {
-                if (!_currentSegment.IsFull)
+                if (_currentSegment != expectedSegment)
                 {
                     return _currentSegment;
                 }
                 else
                 {
+
                     var segment = _currentSegment;
-                    _currentSegment = new WalSegment(_category, segment.SegmentId + 1,_currentSegment.CurrentEntryId+1, _options);
-                    _openedSegments.Add(segment.SegmentId, segment);
+                    segment.SetReadOnly();
+                    _metadata.CurrentSegmentId++;
+                    _currentSegment = LoadSegment(_metadata.CurrentSegmentId);
                     SaveMetadata();
                     return _currentSegment;
                 }
@@ -165,7 +174,7 @@ namespace Stormancer.Raft.WAL
                     return i - 1;
                 }
             }
-            return _currentSegmentId;
+            return _metadata.CurrentSegmentId;
         }
 
 
@@ -198,8 +207,8 @@ namespace Stormancer.Raft.WAL
 
         private IWALSegment LoadSegment(int segmentId)
         {
-            var segment = new WalSegment(_category, segmentId, _options);
-            segment.Open();
+            var segment = _segmentProvider.GetOrCreateSegment(_category, segmentId);
+           
             _openedSegments.Add(segmentId, segment);
             return segment;
         }
@@ -246,10 +255,9 @@ namespace Stormancer.Raft.WAL
         }
     }
 
-    internal interface IWALSegment : IAsyncDisposable
+    public interface IWALSegment : IAsyncDisposable
     {
         int SegmentId { get; }
-        bool IsFull { get; }
 
         ValueTask<WalSegmentGetEntriesResult<TLogEntry>> GetEntries<TLogEntry>(ulong firstEntry, ulong lastEntry) where TLogEntry : IReplicatedLogEntry;
 
@@ -258,6 +266,7 @@ namespace Stormancer.Raft.WAL
         ValueTask<LogEntryHeader> GetEntryHeader(ulong firstEntry);
 
         bool TryTruncateEnd(ulong newLastEntryId);
+        void SetReadOnly();
     }
 
     public struct LogEntryHeader
@@ -266,52 +275,4 @@ namespace Stormancer.Raft.WAL
         public ulong Term { get; set; }
         public ulong EntryId { get; set; }
     }
-    internal class WalSegment : IWALSegment
-    {
-        private readonly LogOptions _options;
-
-        public WalSegment(string category, int segmentId,ulong startEntryId, LogOptions options)
-        {
-            Category = category;
-            SegmentId = segmentId;
-            _options = options;
-        }
-
-        private int headerOffset;
-        private int contentOffset;
-
-        public string Category { get; }
-        public int SegmentId { get; }
-
-        public bool IsFull => throw new NotImplementedException();
-
-        public bool TryAppendEntry(IReplicatedLogEntry logEntry)
-        {
-
-        }
-
-        public ValueTask<WalSegmentGetEntriesResult<TLogEntry>> GetEntries<TLogEntry>(ulong firstEntry, ulong lastEntry) where TLogEntry : IReplicatedLogEntry
-        {
-            throw new NotImplementedException();
-        }
-
-        public ValueTask<LogEntryHeader> GetEntryHeader(ulong firstEntry)
-        {
-            throw new NotImplementedException();
-        }
-
-        public bool TryTruncateEnd(ulong newLastEntryId)
-        {
-            throw new NotImplementedException();
-        }
-
-        public ValueTask DisposeAsync()
-        {
-            throw new NotImplementedException();
-        }
-
-        public void Open()
-        { }
-    }
-
 }
