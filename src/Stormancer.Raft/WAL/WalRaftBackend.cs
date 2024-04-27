@@ -7,9 +7,10 @@ using System.Threading.Tasks;
 
 namespace Stormancer.Raft.WAL
 {
-    internal class WalShardBackend<TCommand, TCommandResult> : IStorageShardBackend<TCommand, TCommandResult>
+    internal class WalShardBackend<TCommand, TCommandResult, TLogEntry> : IStorageShardBackend<TCommand, TCommandResult,TLogEntry>
         where TCommand : ICommand<TCommand>
         where TCommandResult : ICommandResult<TCommandResult>
+        where TLogEntry : IReplicatedLogEntry<TLogEntry>
     {
         public ulong LastAppliedLogEntry => throw new NotImplementedException();
 
@@ -26,27 +27,27 @@ namespace Stormancer.Raft.WAL
             throw new NotImplementedException();
         }
 
-        public Task<IEnumerable<IReplicatedLogEntry>> GetEntries(ref ulong firstEntryId, ref ulong lastEntryId, out ulong prevLogEntryId, out ulong prevLogEntryTerm)
+        public Task<IEnumerable<TLogEntry>> GetEntries(ref ulong firstEntryId, ref ulong lastEntryId, out ulong prevLogEntryId, out ulong prevLogEntryTerm)
         {
             throw new NotImplementedException();
         }
 
-        public bool TryAppendCommand(TCommand command, [NotNullWhen(true)] out IReplicatedLogEntry? entry, [NotNullWhen(false)] out Error? error)
+        public bool TryAppendCommand(TCommand command, [NotNullWhen(true)] out TLogEntry? entry, [NotNullWhen(false)] out Error? error)
         {
             throw new NotImplementedException();
         }
 
-        public bool TryAppendConfigurationChangeCommand(Guid cmdId, ShardsConfigurationRecord configuration, [NotNullWhen(true)] out IReplicatedLogEntry? entry, [NotNullWhen(false)] out Error? error)
+        public bool TryAppendConfigurationChangeCommand(Guid cmdId, ShardsConfigurationRecord configuration, [NotNullWhen(true)] out TLogEntry? entry, [NotNullWhen(false)] out Error? error)
         {
             throw new NotImplementedException();
         }
 
-        public bool TryAppendEntries(IEnumerable<IReplicatedLogEntry> entries)
+        public bool TryAppendEntries(IEnumerable<TLogEntry> entries)
         {
             throw new NotImplementedException();
         }
 
-        public bool TryAppendNoOpCommand([NotNullWhen(true)] out IReplicatedLogEntry? entry, [NotNullWhen(false)] out Error? error)
+        public bool TryAppendNoOpCommand([NotNullWhen(true)] out TLogEntry? entry, [NotNullWhen(false)] out Error? error)
         {
             throw new NotImplementedException();
         }

@@ -40,9 +40,9 @@ namespace Stormancer.Raft
     public interface IReplicatedStorageMessageChannel
     {
 
-        void AppendEntries(Guid origin, Guid destination, ulong term, IEnumerable<IReplicatedLogEntry> entries, ulong lastLeaderEntryId, ulong prevLogIndex, ulong prevLogTerm, ulong leaderCommit);
+        void AppendEntries<TLogEntry>(Guid origin, Guid destination, ulong term, IEnumerable<TLogEntry> entries, ulong lastLeaderEntryId, ulong prevLogIndex, ulong prevLogTerm, ulong leaderCommit) where TLogEntry:IReplicatedLogEntry<TLogEntry>;
 
-        Task<AppendEntriesResult> AppendEntriesAsync(Guid origin, Guid destination, ulong term, IEnumerable<IReplicatedLogEntry> entries, ulong lastLeaderEntryId, ulong prevLogIndex, ulong prevLogTerm, ulong leaderCommit);
+        Task<AppendEntriesResult> AppendEntriesAsync<TLogEntry>(Guid origin, Guid destination, ulong term, IEnumerable<TLogEntry> entries, ulong lastLeaderEntryId, ulong prevLogIndex, ulong prevLogTerm, ulong leaderCommit) where TLogEntry : IReplicatedLogEntry<TLogEntry>;
 
         Task<RequestVoteResult> RequestVoteAsync(Guid candidateId, Guid destination, ulong term, ulong lastLogIndex, ulong lastLogTerm);
 
@@ -59,7 +59,7 @@ namespace Stormancer.Raft
     public interface IReplicatedStorageMessageHandler
     {
 
-        AppendEntriesResult OnAppendEntries(ulong term, Guid leaderId, IEnumerable<IReplicatedLogEntry> entries, ulong lastLeaderEntryId, ulong prevLogIndex, ulong prevLogTerm, ulong leaderCommit);
+        AppendEntriesResult OnAppendEntries(ulong term, Guid leaderId, IEnumerable<ISerializedEntry> entries, ulong lastLeaderEntryId, ulong prevLogIndex, ulong prevLogTerm, ulong leaderCommit);
 
         void OnAppendEntriesResult(Guid origin, Guid? leaderId, ulong term, ulong firstLogEntry, ulong lastLogEntry, ulong lastReplicatedIndex, bool success);
 

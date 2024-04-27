@@ -9,6 +9,6 @@ namespace Stormancer.Raft.WAL
 
     public interface IWALSegmentProvider
     {
-        IWALSegment GetOrCreateSegment(string category, int currentSegmentId);
+        IWALSegment GetOrCreateSegment(string category, int segmentId);
     }
 }

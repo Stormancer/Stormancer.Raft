@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace Stormancer.Raft.WAL
 {
-    public struct GetEntriesResult<TLogEntry> : IDisposable where TLogEntry : IReplicatedLogEntry
+    public struct GetEntriesResult<TLogEntry> : IDisposable where TLogEntry : IReplicatedLogEntry<TLogEntry>
     {
         private readonly IDisposable _disposable;
 
@@ -73,7 +73,7 @@ namespace Stormancer.Raft.WAL
 
 
 
-        public async ValueTask<GetEntriesResult<TLogEntry>> GetEntries<TLogEntry>(ulong firstEntryId, ulong lastEntryId) where TLogEntry : IReplicatedLogEntry
+        public async ValueTask<GetEntriesResult<TLogEntry>> GetEntries<TLogEntry>(ulong firstEntryId, ulong lastEntryId) where TLogEntry : IReplicatedLogEntry<TLogEntry>
         {
             if (firstEntryId < 1)
             {
@@ -110,7 +110,7 @@ namespace Stormancer.Raft.WAL
 
         }
 
-        public void AppendEntries(IEnumerable<IReplicatedLogEntry> logEntries)
+        public void AppendEntries<TLogEntry>(IEnumerable<TLogEntry> logEntries) where TLogEntry: IReplicatedLogEntry<TLogEntry> 
         {
             var segment = GetCurrentSegment();
             foreach (var entry in logEntries)
@@ -259,9 +259,11 @@ namespace Stormancer.Raft.WAL
     {
         int SegmentId { get; }
 
-        ValueTask<WalSegmentGetEntriesResult<TLogEntry>> GetEntries<TLogEntry>(ulong firstEntry, ulong lastEntry) where TLogEntry : IReplicatedLogEntry;
+        string Category { get; }
 
-        bool TryAppendEntry(IReplicatedLogEntry logEntry);
+        ValueTask<WalSegmentGetEntriesResult<TLogEntry>> GetEntries<TLogEntry>(ulong firstEntry, ulong lastEntry) where TLogEntry : IReplicatedLogEntry<TLogEntry>;
+
+        bool TryAppendEntry<TLogEntry>(TLogEntry logEntry) where TLogEntry : IReplicatedLogEntry<TLogEntry>;
 
         ValueTask<LogEntryHeader> GetEntryHeader(ulong firstEntry);
 
@@ -272,7 +274,9 @@ namespace Stormancer.Raft.WAL
     public struct LogEntryHeader
     {
         public bool Found => Term != 0;
-        public ulong Term { get; set; }
-        public ulong EntryId { get; set; }
+        public required ulong Term { get; init; }
+        public required ulong EntryId { get; init; }
+
+        public required int Length { get; init; }
     }
 }

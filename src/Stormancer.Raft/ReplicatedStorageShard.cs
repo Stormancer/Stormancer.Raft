@@ -49,9 +49,10 @@ namespace Stormancer.Raft
 
 
 
-    public class ReplicatedStorageShard<TCommand, TCommandResult> : IReplicatedStorageMessageHandler
+    public class ReplicatedStorageShard<TCommand, TCommandResult, TLogEntry> : IReplicatedStorageMessageHandler
     where TCommand : ICommand<TCommand>
     where TCommandResult : ICommandResult<TCommandResult>
+    where TLogEntry : IReplicatedLogEntry<TLogEntry>
     {
         private class ShardReplicaSynchronisationState(Guid shardUid, ulong nextLogEntryIdToSend)
         {
@@ -78,7 +79,7 @@ namespace Stormancer.Raft
         private Guid? _votedFor = null;
 
         private readonly IReplicatedStorageMessageChannel? _channel;
-        private readonly IStorageShardBackend<TCommand, TCommandResult> _backend;
+        private readonly IStorageShardBackend<TCommand, TCommandResult, TLogEntry> _backend;
 
         private readonly ReplicatedStorageShardConfiguration _config;
 
@@ -94,7 +95,7 @@ namespace Stormancer.Raft
             ILoggerFactory logger,
             IReplicatedStorageMessageChannel channel,
 
-            IStorageShardBackend<TCommand, TCommandResult> backend
+            IStorageShardBackend<TCommand, TCommandResult, TLogEntry> backend
             )
         {
             ArgumentNullException.ThrowIfNull(config, nameof(config));
@@ -355,7 +356,7 @@ namespace Stormancer.Raft
 
                 ShardsReplicationLogging.LogSendingAppendCommand(_logger, ShardUid, targetId, _backend.CurrentTerm, firstEntryId, lastEntryId, _commitIndex);
 
-                var result = await _channel.AppendEntriesAsync(
+                var result = await _channel.AppendEntriesAsync<TLogEntry>(
                     this.ShardUid,
                     targetId,
                     _backend.CurrentTerm,
@@ -377,12 +378,12 @@ namespace Stormancer.Raft
                         state.AppendInProgress = false;
                         return;
                     }
-                    else if(!result.Success)
+                    else if (!result.Success)
                     {
                         state.LastAppendSuccess = false;
                         var candidate = state.NextLogEntryIdToSend - 1;
                         state.NextLogEntryIdToSend = candidate < (result.LastLogEntryId + 1) ? candidate : (result.LastLogEntryId + 1);
-                      
+
 
                     }
                     else
@@ -395,7 +396,7 @@ namespace Stormancer.Raft
                         if (!state.LastAppendSuccess)
                         {
                             state.LastAppendSuccess = true;
-                           
+
                         }
                         state.NextLogEntryIdToSend = result.LastLogEntryId + 1;
 
@@ -404,7 +405,7 @@ namespace Stormancer.Raft
                             state.AppendInProgress = false;
                             return;
                         }
-                       
+
                     }
                 }
             }
@@ -493,7 +494,7 @@ namespace Stormancer.Raft
                 LastAppliedLogEntryId = _backend.LastAppliedLogEntry,
             };
         }
-        public AppendEntriesResult OnAppendEntries(ulong term, Guid leaderId, IEnumerable<IReplicatedLogEntry> entries, ulong lastLeaderEntryId, ulong prevLogIndex, ulong prevLogTerm, ulong leaderCommit)
+        public AppendEntriesResult OnAppendEntries(ulong term, Guid leaderId, IEnumerable<ISerializedEntry> entries, ulong lastLeaderEntryId, ulong prevLogIndex, ulong prevLogTerm, ulong leaderCommit)
         {
 
             /*
@@ -534,7 +535,7 @@ namespace Stormancer.Raft
 
 
 
-            if (!_backend.TryAppendEntries(entries))
+            if (!_backend.TryAppendEntries(entries.Select(e => e.ReadAs<TLogEntry>())))
             {
                 return CreateAppendEntriesResult(leaderId, false);
             }
@@ -590,7 +591,8 @@ namespace Stormancer.Raft
                                 shardInstance.NextLogEntryIdToSend = candidate < (lastLogEntry + 1) ? candidate : (lastLogEntry + 1);
 
                             }
-                            AppendEntries(shardInstance, true);
+                            //We start the next synchronization attempt and don't wait for completion.
+                            _ = AppendEntries(shardInstance, true);
                         }
                         else
                         {
@@ -624,7 +626,8 @@ namespace Stormancer.Raft
                         }
                         else if (IsLeader && shardInstance.LastKnownReplicatedLogEntry != this._backend.LastLogEntry)
                         {
-                            AppendEntries(shardInstance, true);
+                            //We start the next synchronization attempt and don't wait for completion.
+                            _ = AppendEntries(shardInstance, true);
                         }
 
                     }
@@ -634,6 +637,7 @@ namespace Stormancer.Raft
 
             if (commitHappened)
             {
+                //We are certain that AppendEntries wasn't called by the function.
                 AppendEntriesToReplica(true);
             }
         }
