@@ -234,70 +234,7 @@ namespace Stormancer.Raft
     internal class IncrementBackend : IStorageShardBackend<IncrementOperation, IncrementResult>
     {
 
-        private class Entry : IReplicatedLogEntry
-        {
-            public Entry(ulong term, ulong id, int value)
-            {
-                Term = term;
-                Value = value;
-                Id = id;
-
-
-            }
-
-            public Entry(ulong term, ulong id, Span<byte> buffer)
-            {
-                Term = term;
-
-                Id = id;
-                Value = BinaryPrimitives.ReadInt32BigEndian(buffer[1..]);
-
-            }
-            public ulong Term { get; }
-            public int Value { get; }
-
-            public ulong Id { get; }
-
-
-
-            public int GetLength()
-            {
-                return 5;
-            }
-
-            public bool TryWrite(Span<byte> buffer, out int length)
-            {
-                length = 5;
-                if (buffer.Length < 5)
-                {
-
-                    return false;
-                }
-                else
-                {
-                    BinaryPrimitives.TryWriteInt32BigEndian(buffer[1..5], Value);
-                    return true;
-                }
-            }
-
-            public static bool TryRead(ulong term, ulong id, ReadOnlySequence<byte> buffer, [NotNullWhen(true)] out Entry? entry, out int bytesRead)
-            {
-                if (buffer.Length < 4)
-                {
-                    bytesRead = 0;
-                    entry = default;
-                    return false;
-                }
-                else
-                {
-                    var reader = new SequenceReader<byte>(buffer.Slice(1));
-                    reader.TryReadBigEndian(out int value);
-                    bytesRead = 4;
-                    entry = new Entry(term, id, value);
-                    return true;
-                }
-            }
-        }
+       
         private class ClusterConfigurationEntry : IReplicatedLogEntry
         {
             public ClusterConfigurationEntry(ulong term, ulong id, ShardsConfigurationRecord shardsConfig)

@@ -18,10 +18,14 @@ namespace Stormancer.Raft.WAL
         public MemoryPool<byte> MemoryPool { get; set; } = MemoryPool<byte>.Shared;
     }
 
-    public class MemoryWALSegmentProvider : IWALSegmentProvider
+    public class MemoryWALSegmentProvider : IWALStorageProvider
     {
         private readonly MemoryWALSegmentOptions _options;
 
+        private object _lock = new object();
+
+        private IMemoryOwner<byte>? _metadataMemOwner;
+        private Memory<byte>? _metadataBuffer;
 
         public MemoryWALSegmentProvider(MemoryWALSegmentOptions options)
         {
@@ -30,6 +34,48 @@ namespace Stormancer.Raft.WAL
         public IWALSegment GetOrCreateSegment(string category, int segmentId)
         {
             return new MemoryWALSegment(category, segmentId, _options);
+        }
+
+        public bool TryReadMetadata<TMetadataContent>([NotNullWhen(true)] out LogMetadata<TMetadataContent>? metadata) where TMetadataContent : IRecord<TMetadataContent>
+        {
+            lock(_lock)
+            {
+
+                if(_metadataBuffer !=null)
+                {
+                    return LogMetadata<TMetadataContent>.TryRead(new ReadOnlySequence<byte>(_metadataBuffer.Value), out metadata, out var _);
+                }
+                else
+                {
+                    metadata = null;
+                    return false;
+                }
+            }
+        }
+
+        public void SaveMetadata<TMetadataContent>(LogMetadata<TMetadataContent> metadata) where TMetadataContent : IRecord<TMetadataContent>
+        {
+           lock(_lock)
+            {
+                if(_metadataMemOwner != null)
+                {
+                    _metadataMemOwner.Dispose();
+                }
+                _metadataMemOwner= _options.MemoryPool.Rent(metadata.GetLength());
+
+                var buffer = _metadataMemOwner.Memory.Span;
+
+                if(metadata.TryWrite(ref buffer, out var length))
+                {
+                    _metadataBuffer = _metadataMemOwner.Memory.Slice(0, length);
+                }
+                else
+                {
+                    _metadataMemOwner.Dispose();
+                    throw new InvalidOperationException("Failed to write metadata.");
+                }
+
+            }
         }
 
         private class MemoryPage : IDisposable, IBufferWriter<byte>
@@ -187,8 +233,8 @@ namespace Stormancer.Raft.WAL
                 SegmentId = segmentId;
                 _options = options;
 
-                CreateNewIndexPage();
-                CreateNewContentPage();
+                TryCreateNewContentPage();
+                TryCreateNewIndexPage();
             }
 
             [MemberNotNull(nameof(_currentIndexPage))]
@@ -214,20 +260,12 @@ namespace Stormancer.Raft.WAL
 
             public string Category { get; }
 
+            public bool IsEmpty => throw new NotImplementedException();
 
             public ValueTask DisposeAsync()
             {
-                foreach (var page in _indexPages)
-                {
-                    page.Dispose();
-                }
-                _currentIndexPage = null;
-
-                foreach (var page in _contentPages)
-                {
-                    page.Dispose();
-                }
-                _currentContentPage = null;
+                Delete();
+                
                 return ValueTask.CompletedTask;
             }
 
@@ -386,7 +424,7 @@ namespace Stormancer.Raft.WAL
 
                     while (!_currentContentPage.CanAllocate(length))
                     {
-                        if (!TryAllocateNewContentPage())
+                        if (!this.TryCreateNewContentPage())
                         {
                             return false;
                         }
@@ -395,7 +433,7 @@ namespace Stormancer.Raft.WAL
 
                     while (!_currentIndexPage.CanAllocate(length))
                     {
-                        if (!TryAllocateNewIndexPage())
+                        if (!TryCreateNewIndexPage())
                         {
                             return false;
                         }
@@ -464,6 +502,25 @@ namespace Stormancer.Raft.WAL
             public void SetReadOnly()
             {
                 _readOnly = true;
+            }
+
+            public LogEntryHeader GetLastEntryHeader()
+            {;
+                return _lastRecord != null ? new LogEntryHeader { EntryId = _lastRecord.Value.EntryId, Term = _lastRecord.Value.Term, Length = _lastRecord.Value.ContentLength } :  LogEntryHeader.NotFound;
+            }
+
+            public void Delete()
+            {
+                foreach (var page in _indexPages)
+                {
+                    page.Dispose();
+                }
+
+
+                foreach (var page in _contentPages)
+                {
+                    page.Dispose();
+                }
             }
         }
     }

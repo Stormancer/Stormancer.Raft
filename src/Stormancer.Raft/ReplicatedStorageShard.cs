@@ -10,8 +10,11 @@ using System.Runtime.CompilerServices;
 namespace Stormancer.Raft
 {
 
-
-
+    internal class NoOpSystemCommand
+    {
+        private NoOpSystemCommand() { }
+        public static NoOpSystemCommand Instance { get; } = new NoOpSystemCommand();
+    }
 
     public interface ICommand<T> where T : ICommand<T>
     {
@@ -22,6 +25,9 @@ namespace Stormancer.Raft
         static abstract bool TryRead(ReadOnlySequence<byte> buffer, out int bytesRead, [NotNullWhen(true)] out T? operation);
 
 
+        bool IsSystem { get; }
+        TSystemCommandContent AsSystem<TSystemCommandContent>() where TSystemCommandContent : IRecord<TSystemCommandContent>;
+        static abstract T CreateSystemCommand(object? systemCommand);
     }
 
     public interface ICommandResult<T> where T : ICommandResult<T>
@@ -148,7 +154,7 @@ namespace Stormancer.Raft
             if (IsLeader)
             {
 
-                if (_backend.TryAppendNoOpCommand(out var entry, out var error))
+                if (_backend.TryAppendCommand(TCommand.CreateSystemCommand(NoOpSystemCommand.Instance), out var entry, out var error))
                 {
                     var task = _backend.WaitCommittedAsync(entry.Id);
                     if (!AppendEntriesToReplica(false))
@@ -200,8 +206,8 @@ namespace Stormancer.Raft
             ValueTask<TCommandResult> task;
             lock (_syncRoot)
             {
-                Guid cmdId = Guid.NewGuid();
-                if (_backend.TryAppendConfigurationChangeCommand(cmdId, record, out var entry, out var error))
+
+                if (_backend.TryAppendCommand(TCommand.CreateSystemCommand(record), out var entry, out var error))
                 {
                     task = _backend.WaitCommittedAsync(entry.Id);
                     if (!AppendEntriesToReplica(false))
@@ -347,11 +353,14 @@ namespace Stormancer.Raft
 
 
 
-                ulong prevLogEntryId;
-                ulong prevLogEntryTerm;
-                var entries = await _backend.GetEntries(ref firstEntryId, ref lastEntryId, out prevLogEntryId, out prevLogEntryTerm);
+              
+                var getEntriesResult = await _backend.GetEntries(firstEntryId, lastEntryId);
+                var entries = getEntriesResult.Entries;
 
-
+                ulong prevLogEntryId = getEntriesResult.PrevLogEntryId;
+                ulong prevLogEntryTerm= getEntriesResult.PrevLogEntryTerm;
+                firstEntryId = getEntriesResult.FirstEntryId;
+                lastEntryId = getEntriesResult.LastEntryId;
 
 
                 ShardsReplicationLogging.LogSendingAppendCommand(_logger, ShardUid, targetId, _backend.CurrentTerm, firstEntryId, lastEntryId, _commitIndex);
@@ -415,66 +424,67 @@ namespace Stormancer.Raft
 
         }
 
-        private async Task AppendEntries(ShardReplicaSynchronisationState state, bool force)
+        private Task AppendEntries(ShardReplicaSynchronisationState state, bool force)
         {
+            throw new NotImplementedException();
 
-            if (state.AppendInProgress && !force)
-            {
-                return;
-            }
-            lock (state.SyncRoot)
-            {
-                if (IsLeader)
-                {
-                    if (state.AppendInProgress && !force)
-                    {
-                        return;
-                    }
-
-
-                    state.AppendInProgress = true;
-                    state.LastAppendEntriesSentOn = DateTime.UtcNow;
-
-                }
-            }
-
-            if (IsLeader)
-            {
-                var targetId = state.ShardUid;
-                var firstEntryId = state.NextLogEntryIdToSend;
+            //if (state.AppendInProgress && !force)
+            //{
+            //    return;
+            //}
+            //lock (state.SyncRoot)
+            //{
+            //    if (IsLeader)
+            //    {
+            //        if (state.AppendInProgress && !force)
+            //        {
+            //            return;
+            //        }
 
 
-                var lastEntryId = _backend.LastLogEntry;
+            //        state.AppendInProgress = true;
+            //        state.LastAppendEntriesSentOn = DateTime.UtcNow;
+
+            //    }
+            //}
+
+            //if (IsLeader)
+            //{
+            //    var targetId = state.ShardUid;
+            //    var firstEntryId = state.NextLogEntryIdToSend;
 
 
-
-                ulong prevLogEntryId;
-                ulong prevLogEntryTerm;
-                var entries = await _backend.GetEntries(ref firstEntryId, ref lastEntryId, out prevLogEntryId, out prevLogEntryTerm);
+            //    var lastEntryId = _backend.LastLogEntry;
 
 
 
+            //    ulong prevLogEntryId;
+            //    ulong prevLogEntryTerm;
+            //    var entries = await _backend.GetEntries(ref firstEntryId, ref lastEntryId, out prevLogEntryId, out prevLogEntryTerm);
 
-                ShardsReplicationLogging.LogSendingAppendCommand(_logger, ShardUid, targetId, _backend.CurrentTerm, firstEntryId, lastEntryId, _commitIndex);
-                _channel?.AppendEntries(
-                    this.ShardUid,
-                    targetId,
-                    _backend.CurrentTerm,
-                    entries,
-                    _backend.LastLogEntry,
-                    prevLogEntryId,
-                    prevLogEntryTerm,
-                    _commitIndex);
 
-                lock (state.SyncRoot)
-                {
 
-                    if (state.LastAppendSuccess)
-                    {
-                        state.NextLogEntryIdToSend = lastEntryId + 1;
-                    }
-                }
-            }
+
+            //    ShardsReplicationLogging.LogSendingAppendCommand(_logger, ShardUid, targetId, _backend.CurrentTerm, firstEntryId, lastEntryId, _commitIndex);
+            //    _channel?.AppendEntries(
+            //        this.ShardUid,
+            //        targetId,
+            //        _backend.CurrentTerm,
+            //        entries,
+            //        _backend.LastLogEntry,
+            //        prevLogEntryId,
+            //        prevLogEntryTerm,
+            //        _commitIndex);
+
+            //    lock (state.SyncRoot)
+            //    {
+
+            //        if (state.LastAppendSuccess)
+            //        {
+            //            state.NextLogEntryIdToSend = lastEntryId + 1;
+            //        }
+            //    }
+            //}
 
 
 

@@ -9,7 +9,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Stormancer.Errors", "src\St
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Stormancer.ZoneTree", "src\Stormancer.ZoneTree\Stormancer.ZoneTree.csproj", "{54F80359-2410-45C5-A61B-3B94980C81D3}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Stormancer.Samples.Raft", "src\Samples\Stormancer.Samples.Raft\Stormancer.Samples.Raft.csproj", "{D781BA2F-D8C2-4080-8668-C244A7165355}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Stormancer.Samples.Raft", "src\Samples\Stormancer.Samples.Raft\Stormancer.Samples.Raft.csproj", "{D781BA2F-D8C2-4080-8668-C244A7165355}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Stormancer.Raft.Tests", "src\Tests\Stormancer.Raft.Tests\Stormancer.Raft.Tests.csproj", "{B8F1B466-B8BE-4703-B271-8AC9F7489B94}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -33,6 +35,10 @@ Global
 		{D781BA2F-D8C2-4080-8668-C244A7165355}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D781BA2F-D8C2-4080-8668-C244A7165355}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D781BA2F-D8C2-4080-8668-C244A7165355}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B8F1B466-B8BE-4703-B271-8AC9F7489B94}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B8F1B466-B8BE-4703-B271-8AC9F7489B94}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B8F1B466-B8BE-4703-B271-8AC9F7489B94}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B8F1B466-B8BE-4703-B271-8AC9F7489B94}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

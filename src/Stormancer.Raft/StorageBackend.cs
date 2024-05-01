@@ -1,11 +1,18 @@
-﻿using System.Diagnostics.CodeAnalysis;
+﻿using Stormancer.Raft.WAL;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace Stormancer.Raft
 {
-    public interface IReplicatedLogEntry<T> where T: IReplicatedLogEntry<T>
+    public enum ReplicatedLogEntryType
+    {
+        SystemClusterConfiguration,
+        NoOp,
+        Content
+    }
+    public interface IReplicatedLogEntry<T>  where T: IReplicatedLogEntry<T>
     {
 
         int GetLength();
@@ -16,7 +23,20 @@ namespace Stormancer.Raft
 
         ulong Term { get; }
 
+        ReplicatedLogEntryType Type { get; }
+
+       
+
+        /// <summary>
+        /// If the entry is of type ClusterConfiguration, returns the stored <see cref="ShardsConfigurationRecord"/>
+        /// </summary>
+        /// <returns></returns>
+        TContent? As<TContent>() where TContent: IRecord<TContent>;
         static abstract bool TryRead(ulong id, ulong term, ReadOnlySpan<byte> content,[NotNullWhen(true)] out T? value);
+
+
+        static abstract T CreateSystem<TContent>(ulong id, ulong term, ReplicatedLogEntryType type, IRecord content);
+
     }
 
     public interface ISerializedEntry
@@ -42,14 +62,12 @@ namespace Stormancer.Raft
 
 
         bool TryAppendCommand(TCommand command, [NotNullWhen(true)] out TLogEntry? entry, [NotNullWhen(false)] out Error? error);
-        bool TryAppendConfigurationChangeCommand(Guid cmdId, ShardsConfigurationRecord configuration, [NotNullWhen(true)] out TLogEntry? entry, [NotNullWhen(false)] out Error? error);
-        bool TryAppendNoOpCommand([NotNullWhen(true)] out TLogEntry? entry, [NotNullWhen(false)] out Error? error);
-
+        
         bool TryAppendEntries(IEnumerable<TLogEntry> entries);
 
         void ApplyEntries(ulong index);
 
-        Task<IEnumerable<TLogEntry>> GetEntries(ref ulong firstEntryId, ref ulong lastEntryId, out ulong prevLogEntryId, out ulong prevLogEntryTerm);
+        ValueTask<GetEntriesResult<TLogEntry>> GetEntries( ulong firstEntryId,  ulong lastEntryId);
 
         bool TryTruncateEntriesAfter(ulong logEntryId);
 
