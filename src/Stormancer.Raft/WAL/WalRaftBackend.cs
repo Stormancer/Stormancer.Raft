@@ -87,7 +87,7 @@ namespace Stormancer.Raft.WAL
 
         public ValueTask<GetEntriesResult<TLogEntry>> GetEntries(ulong firstEntryId, ulong lastEntryId)
         {
-            return _log.GetEntries<TLogEntry>(firstEntryId, lastEntryId);
+            return _log.GetEntriesAsync<TLogEntry>(firstEntryId, lastEntryId);
         }
 
         public bool TryAppendCommand(TCommand command, [NotNullWhen(true)] out TLogEntry? entry, [NotNullWhen(false)] out Error? error)

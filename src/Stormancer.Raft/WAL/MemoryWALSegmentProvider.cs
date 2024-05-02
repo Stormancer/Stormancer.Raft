@@ -207,7 +207,7 @@ namespace Stormancer.Raft.WAL
             }
 
             [MemberNotNullWhen(true, nameof(_firstRecord), nameof(_lastRecord))]
-            private bool HasContent()
+            private bool HasRecords()
             {
                 return _firstRecord != null;
             }
@@ -240,7 +240,7 @@ namespace Stormancer.Raft.WAL
             [MemberNotNull(nameof(_currentIndexPage))]
             private bool TryCreateNewIndexPage()
             {
-                var id = _currentIndexPage != null ? _currentIndexPage.Id + 1 : 1;
+                var id = _currentIndexPage != null ? _currentIndexPage.Id + 1 : 0;
                 _currentIndexPage = new MemoryPage( id, _options.MemoryPool.Rent(_options.PageSize));
                 _indexPages.Add(_currentIndexPage);
                 return true;
@@ -249,9 +249,9 @@ namespace Stormancer.Raft.WAL
             [MemberNotNull(nameof(_currentContentPage))]
             private bool TryCreateNewContentPage()
             {
-                var id = _currentContentPage != null ? _currentContentPage.Id + 1 : 1;
+                var id = _currentContentPage != null ? _currentContentPage.Id + 1 : 0;
                 _currentContentPage = new MemoryPage( id, _options.MemoryPool.Rent(_options.PageSize));
-                _indexPages.Add(_currentContentPage);
+                _contentPages.Add(_currentContentPage);
                 return true;
             }
             public int PagesCount => _indexPages.Count + _contentPages.Count;
@@ -271,7 +271,7 @@ namespace Stormancer.Raft.WAL
 
             public ValueTask<WalSegmentGetEntriesResult<TLogEntry>> GetEntries<TLogEntry>(ulong firstEntryId, ulong lastEntryId) where TLogEntry : IReplicatedLogEntry<TLogEntry>
             {
-                if (!HasContent())
+                if (!HasRecords())
                 {
                     return ValueTask.FromResult(new WalSegmentGetEntriesResult<TLogEntry>(Enumerable.Empty<TLogEntry>(), 0, 0, _segmentState));
                 }
@@ -431,7 +431,7 @@ namespace Stormancer.Raft.WAL
 
                     }
 
-                    while (!_currentIndexPage.CanAllocate(length))
+                    while (!_currentIndexPage.CanAllocate(IndexRecord.Length))
                     {
                         if (!TryCreateNewIndexPage())
                         {
@@ -454,6 +454,10 @@ namespace Stormancer.Raft.WAL
                     indexRecord.TryWrite(span);
                     _currentIndexPage.Advance(IndexRecord.Length);
 
+                    if(_firstRecord == null)
+                    {
+                        _firstRecord = indexRecord;
+                    }
                     _lastRecord = indexRecord;
                     return true;
 
@@ -467,7 +471,7 @@ namespace Stormancer.Raft.WAL
                 lock (_syncRoot)
                 {
 
-                    if (!HasContent())
+                    if (!HasRecords())
                     {
                         return true;
                     }
@@ -479,6 +483,9 @@ namespace Stormancer.Raft.WAL
 
                     if (newLastEntryId < _firstRecord.Value.EntryId)
                     {
+                        _currentContentPage = _contentPages[0];
+                        _currentIndexPage = _indexPages[0];
+                        
                         _firstRecord = null;
                         _lastRecord = null;
                         _readOnly = false;
@@ -488,6 +495,12 @@ namespace Stormancer.Raft.WAL
                     if (TryGetEntryHeader(newLastEntryId, out var header))
                     {
                         _lastRecord = header;
+                        this.TryGetIndexPosition(header.EntryId, out var pageId, out _);
+
+                        _currentIndexPage = _indexPages[pageId];
+                        _currentContentPage = _contentPages[header.ContentPageId];
+                            
+
                         _readOnly = false;
                         return true;
                     }

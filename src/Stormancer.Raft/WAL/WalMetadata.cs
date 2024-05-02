@@ -22,10 +22,17 @@ namespace Stormancer.Raft.WAL
 
         public int SegmentIdOffset { get; private set; } = 0;
 
-        internal bool TryAddEntry(IWALSegment segment, ulong entry, ulong term)
+        /// <summary>
+        /// Tries updating the metadata by adding an entry. 
+        /// </summary>
+        /// <param name="segmentId"></param>
+        /// <param name="entry"></param>
+        /// <param name="term"></param>
+        /// <returns>True if the metadata changed.</returns>
+        public bool TryAddEntry(int segmentId, ulong entry, ulong term)
         {
             var result = false;
-            if (!(SegmentsStarts.Count + SegmentIdOffset > segment.SegmentId))
+            if (!(SegmentsStarts.Count + SegmentIdOffset > segmentId))
             {
                 SegmentsStarts.Add(entry);
                 result |= true;
@@ -40,19 +47,7 @@ namespace Stormancer.Raft.WAL
             return result;
 
         }
-        public void AddSegment(ulong entryId)
-        {
-
-            if (entryId <= SegmentsStarts[SegmentsStarts.Count - 1])
-            {
-                throw new InvalidOperationException("Failed to add segment");
-
-            }
-            SegmentsStarts.Add(entryId);
-
-
-        }
-
+        
         public IEnumerable<int> RemoveBefore(ulong entryId)
         {
 
@@ -119,7 +114,7 @@ namespace Stormancer.Raft.WAL
             for (int i = Terms.Count - 1; i >= 0; i--)
             {
                 var termInfos = Terms[i];
-                if (termInfos.EntryId < entryId)
+                if (termInfos.EntryId <= entryId)
                 {
                     term = termInfos.Term;
                     return true;
@@ -132,7 +127,7 @@ namespace Stormancer.Raft.WAL
 
         }
 
-        public TContent? Content { get; internal set; }
+        public TContent? Content { get; set; }
 
 
         public static bool TryRead(ReadOnlySequence<byte> buffer, out LogMetadata<TContent>? metadata, out int length)

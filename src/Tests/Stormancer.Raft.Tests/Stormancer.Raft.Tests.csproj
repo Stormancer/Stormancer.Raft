@@ -17,6 +17,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\Stormancer.Errors\Stormancer.Errors.csproj" />
+    <ProjectReference Include="..\..\Stormancer.Raft\Stormancer.Raft.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
 

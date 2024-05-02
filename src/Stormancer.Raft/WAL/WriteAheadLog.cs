@@ -49,7 +49,7 @@ namespace Stormancer.Raft.WAL
         public required IWALStorageProvider Storage { get; set; }
 
     }
-    internal class WriteAheadLog<TMetadataContent> : IAsyncDisposable
+    public class WriteAheadLog<TMetadataContent> : IAsyncDisposable
         where TMetadataContent : IRecord<TMetadataContent>
     {
         private object _lock = new object();
@@ -69,9 +69,11 @@ namespace Stormancer.Raft.WAL
             }
             _category = category;
             _options = options;
-            _metadata = LoadMetadata();
+
             _segmentProvider = _options.Storage;
+            _metadata = LoadMetadata();
             _currentSegment = GetOrLoadSegment(_metadata.CurrentSegmentId);
+
         }
 
 
@@ -156,7 +158,7 @@ namespace Stormancer.Raft.WAL
             throw new NotImplementedException("Snapshot");
         }
 
-        public async ValueTask<GetEntriesResult<TLogEntry>> GetEntries<TLogEntry>(ulong firstEntryId, ulong lastEntryId) where TLogEntry : IReplicatedLogEntry<TLogEntry>
+        public async ValueTask<GetEntriesResult<TLogEntry>> GetEntriesAsync<TLogEntry>(ulong firstEntryId, ulong lastEntryId) where TLogEntry : IReplicatedLogEntry<TLogEntry>
         {
             if (firstEntryId < 1)
             {
@@ -220,7 +222,7 @@ namespace Stormancer.Raft.WAL
 
             if (segment.TryAppendEntry(entry))
             {
-                if (_metadata.TryAddEntry(segment, entry.Id, entry.Term))
+                if (_metadata.TryAddEntry(segment.SegmentId, entry.Id, entry.Term))
                 {
                     SaveMetadata();
                 }
@@ -295,12 +297,18 @@ namespace Stormancer.Raft.WAL
 
         private IWALSegment GetOrLoadSegment(int segmentId)
         {
+
             if (_openedSegments.TryGetValue(segmentId, out var segment))
             {
                 return segment;
             }
             else
             {
+                if (segmentId == -1)
+                {
+                    segmentId = 0;
+                }
+
                 segment = _segmentProvider.GetOrCreateSegment(_category, segmentId);
 
                 _openedSegments.Add(segmentId, segment);
