@@ -34,7 +34,7 @@ namespace Stormancer.Raft.Tests
 
     public class MetadataTests
     {
-        
+
         [Fact]
         public void MetadataAddEntry()
         {
@@ -54,8 +54,8 @@ namespace Stormancer.Raft.Tests
             Assert.True(metadata.TryAddEntry(0, 3, 2));
             Assert.True(metadata.TryAddEntry(1, 4, 3));
 
-            Assert.True(metadata.TryGetTerm(2, out var term)&& 1 == term);
-            
+            Assert.True(metadata.TryGetTerm(2, out var term) && 1 == term);
+
             Assert.True(metadata.TryGetTerm(10, out term) && term == 3);
             Assert.True(metadata.TryGetTerm(3, out term) && term == 2);
         }
@@ -116,8 +116,25 @@ namespace Stormancer.Raft.Tests
 
             Assert.True(metadata.TryGetTerm(10, out term) && term == 3);
             Assert.True(metadata.TryGetTerm(3, out term) && term == 2);
-            Assert.True(metadata.TryGetSegment(4,out var segmentId) && segmentId == 1);
+            Assert.True(metadata.TryGetSegment(4, out var segmentId) && segmentId == 1);
             Assert.True(metadata.TryGetSegment(3, out segmentId) && segmentId == 0);
+        }
+
+        [Fact]
+        public void SerializeRaftMetadata()
+        {
+            var metadata = new RaftMetadata() { CurrentTerm = 3, LastAppliedLogEntry = 13 };
+
+            var pool = MemoryPool<byte>.Shared;
+
+            using var mem = pool.Rent(metadata.GetLength());
+
+            Assert.True(metadata.TryWrite(mem.Memory.Span));
+
+            Assert.True(RaftMetadata.TryRead(new ReadOnlySequence<byte>(mem.Memory), out var m, out var l) && l == metadata.GetLength());
+
+            Assert.True(m.LastAppliedLogEntry == metadata.LastAppliedLogEntry && m.CurrentTerm == metadata.CurrentTerm);
+
         }
     }
 }

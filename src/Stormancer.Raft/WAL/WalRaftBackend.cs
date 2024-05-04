@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.ObjectPool;
+﻿using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.ObjectPool;
 using Stormancer.Threading;
 using System;
 using System.Buffers;
@@ -11,51 +12,53 @@ using System.Threading.Tasks;
 
 namespace Stormancer.Raft.WAL
 {
+    public class RaftMetadata : IRecord<RaftMetadata>
+    {
+        public static bool TryRead(ReadOnlySequence<byte> buffer, [NotNullWhen(true)] out RaftMetadata? record, out int length)
+        {
+            length = 16;
+            if (buffer.Length < 16)
+            {
+                record = null;
+
+                return false;
+            }
+            Span<byte> b = stackalloc byte[8];
+
+            var reader = new SequenceReader<byte>(buffer);
+            reader.TryCopyTo(b);
+            reader.Advance(8);
+            var currentTerm = BinaryPrimitives.ReadUInt64BigEndian(b);
+
+            reader.TryCopyTo(b);
+            var lastApplied = BinaryPrimitives.ReadUInt64BigEndian(b);
+            record = new RaftMetadata { CurrentTerm = currentTerm, LastAppliedLogEntry = lastApplied };
+            return true;
+        }
+
+
+
+        public int GetLength()
+        {
+            return 8 + 8;
+        }
+
+        public bool TryWrite(Span<byte> buffer)
+        {
+            return (BinaryPrimitives.TryWriteUInt64BigEndian(buffer[0..8], CurrentTerm) && BinaryPrimitives.TryWriteUInt64BigEndian(buffer[8..16], LastAppliedLogEntry));
+
+        }
+
+        public ulong LastAppliedLogEntry { get; set; }
+        public ulong CurrentTerm { get; set; }
+    }
+
     internal class WalShardBackend<TCommand, TCommandResult, TLogEntry> : IStorageShardBackend<TCommand, TCommandResult, TLogEntry>
         where TCommand : ICommand<TCommand>
         where TCommandResult : ICommandResult<TCommandResult>
         where TLogEntry : IReplicatedLogEntry<TLogEntry>
     {
-        private class RaftMetadata : IRecord<RaftMetadata>
-        {
-            public static bool TryRead(ReadOnlySequence<byte> buffer, [NotNullWhen(true)] out WalShardBackend<TCommand, TCommandResult, TLogEntry>.RaftMetadata? record, out int length)
-            {
-                length = 16;
-                if (buffer.Length < 16)
-                {
-                    record = null;
-
-                    return false;
-                }
-                Span<byte> b = stackalloc byte[8];
-
-                var reader = new SequenceReader<byte>(buffer);
-                reader.TryCopyTo(b);
-                reader.Advance(8);
-                var currentTerm = BinaryPrimitives.ReadUInt64BigEndian(b);
-
-                reader.TryCopyTo(b);
-                var lastApplied = BinaryPrimitives.ReadUInt64BigEndian(b);
-                record = new RaftMetadata { CurrentTerm = currentTerm, LastAppliedLogEntry = lastApplied };
-                return true;
-            }
-
-            
-
-            public int GetLength()
-            {
-                return 8 + 8;
-            }
-
-            public bool TryWrite(Span<byte> buffer)
-            {
-                return (BinaryPrimitives.TryWriteUInt64BigEndian(buffer[0..8], CurrentTerm) && BinaryPrimitives.TryWriteUInt64BigEndian(buffer[8..16], LastAppliedLogEntry));
-
-            }
-
-            public ulong LastAppliedLogEntry { get; set; }
-            public ulong CurrentTerm { get; set; }
-        }
+        
         private WriteAheadLog<RaftMetadata> _log;
         private RaftMetadata _metadata;
 
