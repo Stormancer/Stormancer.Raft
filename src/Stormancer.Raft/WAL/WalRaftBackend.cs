@@ -43,8 +43,9 @@ namespace Stormancer.Raft.WAL
             return 8 + 8;
         }
 
-        public bool TryWrite(Span<byte> buffer)
+        public bool TryWrite(ref Span<byte> buffer,out int length)
         {
+            length = 16;
             return (BinaryPrimitives.TryWriteUInt64BigEndian(buffer[0..8], CurrentTerm) && BinaryPrimitives.TryWriteUInt64BigEndian(buffer[8..16], LastAppliedLogEntry));
 
         }
@@ -53,7 +54,7 @@ namespace Stormancer.Raft.WAL
         public ulong CurrentTerm { get; set; }
     }
 
-    internal class WalShardBackend<TCommand, TCommandResult, TLogEntry> : IStorageShardBackend<TCommand, TCommandResult, TLogEntry>
+    public class WalShardBackend<TCommand, TCommandResult, TLogEntry> : IStorageShardBackend<TCommand, TCommandResult, TLogEntry>
         where TCommand : ICommand<TCommand>
         where TCommandResult : ICommandResult<TCommandResult>
         where TLogEntry : IReplicatedLogEntry<TLogEntry>

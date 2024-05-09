@@ -12,7 +12,7 @@ namespace Stormancer.Raft
     {
         int GetLength();
 
-        bool TryWrite(Span<byte> buffer);
+        bool TryWrite(ref Span<byte> buffer,out int length);
     }
     public interface IRecord<T> : IRecord where T : IRecord<T>
     {

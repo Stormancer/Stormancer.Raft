@@ -6,46 +6,7 @@ using System.Threading.Tasks;
 
 namespace Stormancer.Raft
 {
-    public enum ReplicatedLogEntryType
-    {
-        SystemClusterConfiguration,
-        NoOp,
-        Content
-    }
-    public interface IReplicatedLogEntry<T>  where T: IReplicatedLogEntry<T>
-    {
-
-        int GetLength();
-        bool TryWrite(Span<byte> buffer, out int length);
-
-
-        ulong Id { get; }
-
-        ulong Term { get; }
-
-        ReplicatedLogEntryType Type { get; }
-
-       
-
-        /// <summary>
-        /// If the entry is of type ClusterConfiguration, returns the stored <see cref="ShardsConfigurationRecord"/>
-        /// </summary>
-        /// <returns></returns>
-        TContent? As<TContent>() where TContent: IRecord<TContent>;
-        static abstract bool TryRead(ulong id, ulong term, ReadOnlySpan<byte> content,[NotNullWhen(true)] out T? value);
-
-
-        static abstract T CreateSystem<TContent>(ulong id, ulong term, ReplicatedLogEntryType type, IRecord content);
-
-    }
-
-    public interface ISerializedEntry
-    {
-        ulong Id { get; }
-        ulong Term { get; }
-
-        TLogEntry ReadAs<TLogEntry>() where TLogEntry : IReplicatedLogEntry<TLogEntry>;
-    }
+    
 
     public interface IStorageShardBackend<TCommand, TCommandResult, TLogEntry>
         where TCommand : ICommand<TCommand>

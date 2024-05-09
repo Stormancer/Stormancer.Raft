@@ -1,4 +1,5 @@
-﻿using Stormancer.ShardedDb;
+﻿using Stormancer.Raft;
+using Stormancer.Raft.WAL;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,13 +10,14 @@ using Tenray.ZoneTree.Logger;
 
 namespace Stormancer.ZoneTree
 {
+  
     internal class ReplicatedZoneTree<TKey, TValue>
     {
         private readonly IZoneTree<TKey, TValue> _zoneTree;
-        private readonly ReplicatedStorageShard<ZoneTreeCommand, ZoneTreeCommandResult> _shard;
-        private readonly IStorageShardBackend<ZoneTreeCommand, ZoneTreeCommandResult> _backend;
+        private readonly ReplicatedStorageShard<ZoneTreeCommand, ZoneTreeCommandResult,ZoneTreeLogEntry> _shard;
+        private readonly WalShardBackend<ZoneTreeCommand, ZoneTreeCommandResult,ZoneTreeLogEntry> _backend;
 
-        public ReplicatedZoneTree(IZoneTree<TKey,TValue> zoneTree,ReplicatedStorageShard<ZoneTreeCommand,ZoneTreeCommandResult> shard, IStorageShardBackend<ZoneTreeCommand,ZoneTreeCommandResult> backend)
+        public ReplicatedZoneTree(IZoneTree<TKey, TValue> zoneTree, ReplicatedStorageShard<ZoneTreeCommand, ZoneTreeCommandResult, ZoneTreeLogEntry> shard, WalShardBackend<ZoneTreeCommand, ZoneTreeCommandResult,ZoneTreeLogEntry> backend)
         {
             _zoneTree = zoneTree;
             _shard = shard;

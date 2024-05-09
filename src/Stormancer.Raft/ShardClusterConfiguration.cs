@@ -120,7 +120,7 @@ namespace Stormancer.Raft
         }
     }
 
-    public record ShardsConfigurationRecord(HashSet<Server>? Old, HashSet<Server>? New)
+    public record ShardsConfigurationRecord(HashSet<Server>? Old, HashSet<Server>? New) : IRecord<ShardsConfigurationRecord>
     {
         private HashSet<Server>? _servers;
 
@@ -176,10 +176,12 @@ namespace Stormancer.Raft
             return length;
         }
 
-        public bool TryWrite(Span<byte> buffer)
+        public bool TryWrite(ref Span<byte> buffer,out int l)
         {
+            l = GetLength();
             if (buffer.Length < GetLength())
             {
+                
                 return false;
             }
 
