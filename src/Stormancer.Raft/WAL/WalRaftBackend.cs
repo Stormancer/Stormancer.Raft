@@ -36,6 +36,23 @@ namespace Stormancer.Raft.WAL
             return true;
         }
 
+        public static bool TryRead(ref ReadOnlySpan<byte> buffer, [NotNullWhen(true)] out RaftMetadata? record, out int length)
+        {
+            length = 16;
+            if (buffer.Length < 16)
+            {
+                record = null;
+
+                return false;
+            }
+            Span<byte> b = stackalloc byte[8];
+
+           
+            var currentTerm = BinaryPrimitives.ReadUInt64BigEndian(buffer);    
+            var lastApplied = BinaryPrimitives.ReadUInt64BigEndian(buffer.Slice(8));
+            record = new RaftMetadata { CurrentTerm = currentTerm, LastAppliedLogEntry = lastApplied };
+            return true;
+        }
 
 
         public int GetLength()
@@ -50,14 +67,16 @@ namespace Stormancer.Raft.WAL
 
         }
 
+   
+
         public ulong LastAppliedLogEntry { get; set; }
         public ulong CurrentTerm { get; set; }
     }
 
-    public class WalShardBackend<TCommand, TCommandResult, TLogEntry> : IStorageShardBackend<TCommand, TCommandResult, TLogEntry>
+    public class WalShardBackend<TCommand, TCommandResult> : IStorageShardBackend<TCommand, TCommandResult>
         where TCommand : ICommand<TCommand>
         where TCommandResult : ICommandResult<TCommandResult>
-        where TLogEntry : IReplicatedLogEntry<TLogEntry>
+       
     {
         
         private WriteAheadLog<RaftMetadata> _log;
@@ -89,19 +108,19 @@ namespace Stormancer.Raft.WAL
             
         }
 
-        public ValueTask<GetEntriesResult<TLogEntry>> GetEntries(ulong firstEntryId, ulong lastEntryId)
+        public ValueTask<GetEntriesResult> GetEntries(ulong firstEntryId, ulong lastEntryId)
         {
-            return _log.GetEntriesAsync<TLogEntry>(firstEntryId, lastEntryId);
+            return _log.GetEntriesAsync(firstEntryId, lastEntryId);
         }
 
-        public bool TryAppendCommand(TCommand command, [NotNullWhen(true)] out TLogEntry? entry, [NotNullWhen(false)] out Error? error)
+        public bool TryAppendCommand(TCommand command, [NotNullWhen(true)] out LogEntry? entry, [NotNullWhen(false)] out Error? error)
         {
             throw new NotImplementedException();
         }
 
        
 
-        public bool TryAppendEntries(IEnumerable<TLogEntry> entries)
+        public bool TryAppendEntries(IEnumerable<LogEntry> entries)
         {
             throw new NotImplementedException();
         }

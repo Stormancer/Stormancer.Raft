@@ -12,11 +12,11 @@ namespace Stormancer.Raft.WAL
     {
 
     }
-    public struct GetEntriesResult<TLogEntry> : IDisposable where TLogEntry : IReplicatedLogEntry<TLogEntry>
+    public struct GetEntriesResult : IDisposable
     {
         private readonly IDisposable _disposable;
 
-        internal GetEntriesResult(ulong PrevLogEntryId, ulong PrevLogEntryTerm, ulong FirstEntryId, ulong LastEntryId, IEnumerable<TLogEntry> entries, IDisposable disposable)
+        internal GetEntriesResult(ulong PrevLogEntryId, ulong PrevLogEntryTerm, ulong FirstEntryId, ulong LastEntryId, IEnumerable<LogEntry> entries, IDisposable disposable)
         {
             this.PrevLogEntryId = PrevLogEntryId;
             this.PrevLogEntryTerm = PrevLogEntryTerm;
@@ -30,7 +30,7 @@ namespace Stormancer.Raft.WAL
         public ulong PrevLogEntryTerm { get; }
         public ulong FirstEntryId { get; }
         public ulong LastEntryId { get; }
-        public IEnumerable<TLogEntry> Entries { get; }
+        public IEnumerable<LogEntry> Entries { get; }
 
         public void Dispose()
         {
@@ -158,7 +158,7 @@ namespace Stormancer.Raft.WAL
             throw new NotImplementedException("Snapshot");
         }
 
-        public async ValueTask<GetEntriesResult<TLogEntry>> GetEntriesAsync<TLogEntry>(ulong firstEntryId, ulong lastEntryId) where TLogEntry : IReplicatedLogEntry<TLogEntry>
+        public async ValueTask<GetEntriesResult> GetEntriesAsync(ulong firstEntryId, ulong lastEntryId)
         {
             if (firstEntryId < 1)
             {
@@ -195,15 +195,15 @@ namespace Stormancer.Raft.WAL
             }
             var segment = GetOrLoadSegment(firstEntrySegmentId);
 
-            var result = await segment.GetEntries<TLogEntry>(firstEntryId, lastEntryId);
+            var result = await segment.GetEntries(firstEntryId, lastEntryId);
 
-            return new GetEntriesResult<TLogEntry>(prevLogEntryId, prevLogEntryTerm, result.FirstEntryId, result.LastEntryId, result.Entries, result);
+            return new GetEntriesResult(prevLogEntryId, prevLogEntryTerm, result.FirstEntryId, result.LastEntryId, result.Entries, result);
 
 
 
         }
 
-        public void AppendEntries<TLogEntry>(IEnumerable<TLogEntry> logEntries) where TLogEntry : IReplicatedLogEntry<TLogEntry>
+        public void AppendEntries(IEnumerable<LogEntry> logEntries)
         {
             var segment = GetCurrentSegment();
             foreach (var entry in logEntries)
@@ -217,7 +217,7 @@ namespace Stormancer.Raft.WAL
 
 
 
-        private bool TryAppendEntry<TLogEntry>(IWALSegment segment, TLogEntry entry) where TLogEntry : IReplicatedLogEntry<TLogEntry>
+        private bool TryAppendEntry(IWALSegment segment, LogEntry entry) 
         {
 
             if (segment.TryAppendEntry(entry))
@@ -335,9 +335,9 @@ namespace Stormancer.Raft.WAL
         internal int UseCounter;
     }
 
-    public struct WalSegmentGetEntriesResult<TLogEntry> : IDisposable
+    public struct WalSegmentGetEntriesResult : IDisposable
     {
-        public WalSegmentGetEntriesResult(IEnumerable<TLogEntry> entries, ulong firstEntryId, ulong lastEntryId, WALSegmentState state)
+        public WalSegmentGetEntriesResult(IEnumerable<LogEntry> entries, ulong firstEntryId, ulong lastEntryId, WALSegmentState state)
         {
             Entries = entries;
             FirstEntryId = firstEntryId;
@@ -349,7 +349,7 @@ namespace Stormancer.Raft.WAL
 
         private readonly WALSegmentState _state;
 
-        public IEnumerable<TLogEntry> Entries { get; }
+        public IEnumerable<LogEntry> Entries { get; }
         public ulong FirstEntryId { get; }
         public ulong LastEntryId { get; }
 
@@ -365,9 +365,9 @@ namespace Stormancer.Raft.WAL
 
         string Category { get; }
 
-        ValueTask<WalSegmentGetEntriesResult<TLogEntry>> GetEntries<TLogEntry>(ulong firstEntry, ulong lastEntry) where TLogEntry : IReplicatedLogEntry<TLogEntry>;
+        ValueTask<WalSegmentGetEntriesResult> GetEntries(ulong firstEntry, ulong lastEntry);
 
-        bool TryAppendEntry<TLogEntry>(TLogEntry logEntry) where TLogEntry : IReplicatedLogEntry<TLogEntry>;
+        bool TryAppendEntry(LogEntry logEntry);
 
         ValueTask<LogEntryHeader> GetEntryHeader(ulong firstEntry);
 

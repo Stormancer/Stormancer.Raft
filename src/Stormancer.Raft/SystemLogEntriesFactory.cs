@@ -16,6 +16,11 @@ namespace Stormancer.Raft
             throw new NotImplementedException();
         }
 
+        public static bool TryRead(ref ReadOnlySpan<byte> buffer, [NotNullWhen(true)] out NoOpRecord? record, out int length)
+        {
+            throw new NotImplementedException();
+        }
+
         public int GetLength()
         {
             return 0;
@@ -62,6 +67,36 @@ namespace Stormancer.Raft
             }
 
         }
+
+        public bool TryRead(ulong id, ulong term, int recordTypeId, ref ReadOnlySpan<byte> buffer, [NotNullWhen(true)] out LogEntry? entry, out int length)
+        {
+            switch (recordTypeId)
+            {
+                case 1:
+                    entry = new LogEntry(id, term, new NoOpRecord());
+                    length = 0;
+                    return true;
+                case 2:
+
+                    if (ShardsConfigurationRecord.TryRead(ref buffer, out var config, out length))
+                    {
+
+                        entry = new LogEntry(id, term, config);
+                        return true;
+                    }
+                    else
+                    {
+                        entry = null;
+                        return false;
+                    }
+                default:
+                    length = 0;
+                    entry = null;
+                    return false;
+            }
+        }
+
+
         public int GetLength(LogEntry entry)
         {
             return entry.Record.GetLength();
@@ -86,5 +121,7 @@ namespace Stormancer.Raft
                 return false;
             }
         }
+
+        
     }
 }

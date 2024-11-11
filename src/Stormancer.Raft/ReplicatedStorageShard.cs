@@ -55,10 +55,10 @@ namespace Stormancer.Raft
 
 
 
-    public class ReplicatedStorageShard<TCommand, TCommandResult, TLogEntry> : IReplicatedStorageMessageHandler
+    public class ReplicatedStorageShard<TCommand, TCommandResult> : IReplicatedStorageMessageHandler
     where TCommand : ICommand<TCommand>
     where TCommandResult : ICommandResult<TCommandResult>
-    where TLogEntry : IReplicatedLogEntry<TLogEntry>
+
     {
         private class ShardReplicaSynchronisationState(Guid shardUid, ulong nextLogEntryIdToSend)
         {
@@ -85,7 +85,7 @@ namespace Stormancer.Raft
         private Guid? _votedFor = null;
 
         private readonly IReplicatedStorageMessageChannel? _channel;
-        private readonly IStorageShardBackend<TCommand, TCommandResult, TLogEntry> _backend;
+        private readonly IStorageShardBackend<TCommand, TCommandResult> _backend;
 
         private readonly ReplicatedStorageShardConfiguration _config;
 
@@ -100,8 +100,7 @@ namespace Stormancer.Raft
             ReplicatedStorageShardConfiguration config,
             ILoggerFactory logger,
             IReplicatedStorageMessageChannel channel,
-
-            IStorageShardBackend<TCommand, TCommandResult, TLogEntry> backend
+            IStorageShardBackend<TCommand, TCommandResult> backend
             )
         {
             ArgumentNullException.ThrowIfNull(config, nameof(config));
@@ -365,7 +364,7 @@ namespace Stormancer.Raft
 
                 ShardsReplicationLogging.LogSendingAppendCommand(_logger, ShardUid, targetId, _backend.CurrentTerm, firstEntryId, lastEntryId, _commitIndex);
 
-                var result = await _channel.AppendEntriesAsync<TLogEntry>(
+                var result = await _channel.AppendEntriesAsync(
                     this.ShardUid,
                     targetId,
                     _backend.CurrentTerm,
@@ -504,7 +503,7 @@ namespace Stormancer.Raft
                 LastAppliedLogEntryId = _backend.LastAppliedLogEntry,
             };
         }
-        public AppendEntriesResult OnAppendEntries(ulong term, Guid leaderId, IEnumerable<ISerializedEntry> entries, ulong lastLeaderEntryId, ulong prevLogIndex, ulong prevLogTerm, ulong leaderCommit)
+        public AppendEntriesResult OnAppendEntries(ulong term, Guid leaderId, IEnumerable<LogEntry> entries, ulong lastLeaderEntryId, ulong prevLogIndex, ulong prevLogTerm, ulong leaderCommit)
         {
 
             /*
@@ -545,7 +544,7 @@ namespace Stormancer.Raft
 
 
 
-            if (!_backend.TryAppendEntries(entries.Select(e => e.ReadAs<TLogEntry>())))
+            if (!_backend.TryAppendEntries(entries))
             {
                 return CreateAppendEntriesResult(leaderId, false);
             }

@@ -12,10 +12,13 @@ namespace Stormancer.Raft.WAL
 {
     public class MemoryWALSegmentOptions
     {
-        public int PageSize { get; set; } = 1024;
-        public int PagesPerSegment { get; set; } = 256;
+      
+        public int PageSize { get; init; } = 1024;
+        public int PagesPerSegment { get; init; } = 256;
 
-        public MemoryPool<byte> MemoryPool { get; set; } = MemoryPool<byte>.Shared;
+        public MemoryPool<byte> MemoryPool { get; init; } = MemoryPool<byte>.Shared;
+
+        public required ILogEntryReaderWriter ReaderWriter { get; init; }
     }
 
     public class MemoryWALSegmentProvider : IWALStorageProvider
@@ -269,11 +272,11 @@ namespace Stormancer.Raft.WAL
                 return ValueTask.CompletedTask;
             }
 
-            public ValueTask<WalSegmentGetEntriesResult<TLogEntry>> GetEntries<TLogEntry>(ulong firstEntryId, ulong lastEntryId) where TLogEntry : IReplicatedLogEntry<TLogEntry>
+            public ValueTask<WalSegmentGetEntriesResult> GetEntries(ulong firstEntryId, ulong lastEntryId) 
             {
                 if (!HasRecords())
                 {
-                    return ValueTask.FromResult(new WalSegmentGetEntriesResult<TLogEntry>(Enumerable.Empty<TLogEntry>(), 0, 0, _segmentState));
+                    return ValueTask.FromResult(new WalSegmentGetEntriesResult(Enumerable.Empty<LogEntry>(), 0, 0, _segmentState));
                 }
 
                 if (firstEntryId < _firstRecord.Value.EntryId)
@@ -287,23 +290,23 @@ namespace Stormancer.Raft.WAL
 
                 if (firstEntryId > lastEntryId)
                 {
-                    return ValueTask.FromResult(new WalSegmentGetEntriesResult<TLogEntry>(Enumerable.Empty<TLogEntry>(), 0, 0, _segmentState));
+                    return ValueTask.FromResult(new WalSegmentGetEntriesResult(Enumerable.Empty<LogEntry>(), 0, 0, _segmentState));
                 }
 
                 if (!TryGetIndexPosition(firstEntryId, out var firstEntryPageId, out var firstEntryOffset))
                 {
-                    return ValueTask.FromResult(new WalSegmentGetEntriesResult<TLogEntry>(Enumerable.Empty<TLogEntry>(), 0, 0, _segmentState));
+                    return ValueTask.FromResult(new WalSegmentGetEntriesResult(Enumerable.Empty<LogEntry>(), 0, 0, _segmentState));
                 }
 
                 if (!TryGetIndexPosition(lastEntryId, out var lastEntryPageId, out var lastEntryOffset))
                 {
-                    return ValueTask.FromResult(new WalSegmentGetEntriesResult<TLogEntry>(Enumerable.Empty<TLogEntry>(), 0, 0, _segmentState));
+                    return ValueTask.FromResult(new WalSegmentGetEntriesResult(Enumerable.Empty<LogEntry>(), 0, 0, _segmentState));
                 }
 
 
 
 
-                IEnumerable<TLogEntry> EnumerateEntries(ulong firstEntryId, ulong lastEntryId)
+                IEnumerable<LogEntry> EnumerateEntries(ulong firstEntryId, ulong lastEntryId)
                 {
                     for (var index = firstEntryId; index <= lastEntryId; index++)
                     {
@@ -314,22 +317,22 @@ namespace Stormancer.Raft.WAL
                         }
                         else
                         {
-                            yield return GetLogEntry<TLogEntry>(header);
+                            yield return GetLogEntry(header);
                         }
                     }
                 }
 
-                return ValueTask.FromResult(new WalSegmentGetEntriesResult<TLogEntry>(EnumerateEntries(firstEntryId, lastEntryId), firstEntryId, lastEntryId, _segmentState));
+                return ValueTask.FromResult(new WalSegmentGetEntriesResult(EnumerateEntries(firstEntryId, lastEntryId), firstEntryId, lastEntryId, _segmentState));
 
             }
 
-            private TLogEntry GetLogEntry<TLogEntry>(IndexRecord header) where TLogEntry : IReplicatedLogEntry<TLogEntry>
+            private LogEntry GetLogEntry(IndexRecord header)
             {
                 var contentPage = _contentPages[header.ContentPageId];
 
                 var content = contentPage.GetContent(header.ContentOffset, header.ContentLength);
 
-                if (TLogEntry.TryRead(header.EntryId, header.Term, content, out var entry))
+                if (_options.ReaderWriter.TryRead(header.EntryId, header.Term,ref content, out var entry, out var length))
                 {
                     return entry;
                 }
@@ -406,9 +409,11 @@ namespace Stormancer.Raft.WAL
                 }
             }
 
-            public bool TryAppendEntry<TLogEntry>(TLogEntry logEntry) where TLogEntry : IReplicatedLogEntry<TLogEntry>
+            public bool TryAppendEntry(LogEntry logEntry)
             {
-                if (logEntry.GetLength() > _options.PageSize)
+                var writer = _options.ReaderWriter;
+                var length =writer.GetContentLength(logEntry);
+                if (length > _options.PageSize)
                 {
                     return false;
                 }
@@ -419,7 +424,7 @@ namespace Stormancer.Raft.WAL
                     {
                         return false;
                     }
-                    var length = logEntry.GetLength();
+                   
                     
 
                     while (!_currentContentPage.CanAllocate(length))
@@ -443,7 +448,8 @@ namespace Stormancer.Raft.WAL
                     var pageId = _currentContentPage.Id;
                     var span = _currentContentPage.GetSpan(length);
 
-                    logEntry.TryWrite(span, out _);
+                    
+                    writer.TryWriteContent(ref span,logEntry, out _);
 
                     
                     _currentContentPage.Advance(length);

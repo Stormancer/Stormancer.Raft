@@ -97,7 +97,7 @@ namespace Stormancer.Raft
             return true;
         }
 
-        public static bool TryRead(Span<byte> buffer, [NotNullWhen(true)] out Server? server, out int bytesRead)
+        public static bool TryRead(ref ReadOnlySpan<byte> buffer, [NotNullWhen(true)] out Server? server, out int bytesRead)
         {
             if (buffer.Length < 20)
             {
@@ -310,7 +310,7 @@ namespace Stormancer.Raft
 
         }
 
-        public static bool TryRead(Span<byte> buffer, [NotNullWhen(true)] out ShardsConfigurationRecord? config, out int bytesRead)
+        public static bool TryRead(ref ReadOnlySpan<byte> buffer, [NotNullWhen(true)] out ShardsConfigurationRecord? config, out int bytesRead)
         {
 
             if (buffer.Length < 1)
@@ -352,7 +352,8 @@ namespace Stormancer.Raft
 
                 for (short i = 0; i < oldCount; i++)
                 {
-                    if (!Server.TryRead(buffer.Slice(offset), out var server, out var read))
+                    var contentBuffer = buffer.Slice(offset);
+                    if (!Server.TryRead(ref contentBuffer, out var server, out var read))
                     {
                         config = default;
                         bytesRead = 0;
@@ -369,7 +370,8 @@ namespace Stormancer.Raft
             {
                 for (short i = 0; i < newCount; i++)
                 {
-                    if (!Server.TryRead(buffer.Slice(offset), out var server, out var read))
+                    var contentBuffer = buffer.Slice(offset);
+                    if (!Server.TryRead(ref contentBuffer, out var server, out var read))
                     {
                         config = default;
                         bytesRead = 0;

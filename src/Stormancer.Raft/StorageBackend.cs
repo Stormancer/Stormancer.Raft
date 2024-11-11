@@ -8,10 +8,9 @@ namespace Stormancer.Raft
 {
     
 
-    public interface IStorageShardBackend<TCommand, TCommandResult, TLogEntry>
+    public interface IStorageShardBackend<TCommand, TCommandResult>
         where TCommand : ICommand<TCommand>
        where TCommandResult : ICommandResult<TCommandResult>
-        where TLogEntry : IReplicatedLogEntry<TLogEntry>
     {
         ulong LastAppliedLogEntry { get; }
 
@@ -22,13 +21,13 @@ namespace Stormancer.Raft
 
 
 
-        bool TryAppendCommand(TCommand command, [NotNullWhen(true)] out TLogEntry? entry, [NotNullWhen(false)] out Error? error);
+        bool TryAppendCommand(TCommand command, [NotNullWhen(true)] out LogEntry? entry, [NotNullWhen(false)] out Error? error);
         
-        bool TryAppendEntries(IEnumerable<TLogEntry> entries);
+        bool TryAppendEntries(IEnumerable<LogEntry> entries);
 
         void ApplyEntries(ulong index);
 
-        ValueTask<GetEntriesResult<TLogEntry>> GetEntries( ulong firstEntryId,  ulong lastEntryId);
+        ValueTask<GetEntriesResult> GetEntries( ulong firstEntryId,  ulong lastEntryId);
 
         bool TryTruncateEntriesAfter(ulong logEntryId);
 

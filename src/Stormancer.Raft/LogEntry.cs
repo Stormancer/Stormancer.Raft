@@ -34,11 +34,16 @@ namespace Stormancer.Raft
     public interface ILogEntryReaderWriter
     {
         bool TryRead(ulong id, ulong term, ReadOnlySequence<byte> buffer, [NotNullWhen(true)] out LogEntry? entry, out int length);
+
+        bool TryRead(ulong id, ulong term, ref ReadOnlySpan<byte> buffer, [NotNullWhen(true)] out LogEntry? entry, out int length);
+        
         bool TryWriteContent(ref Span<byte> buffer, LogEntry entry, out int length);
 
         int GetContentLength(LogEntry entry);
 
     }
+
+   
     public class IntegerRecordTypeLogEntryReaderWriter : ILogEntryReaderWriter
     {
         private readonly Dictionary<int, IIntegerRecordTypeLogEntryFactory> _idHandlers = new Dictionary<int, IIntegerRecordTypeLogEntryFactory>();
@@ -85,11 +90,37 @@ namespace Stormancer.Raft
             {
                 entry = null;
                 return false;
+            }   
+        }
+
+        public bool TryRead(ulong id, ulong term, ref ReadOnlySpan<byte> buffer, [NotNullWhen(true)] out LogEntry? entry, out int length)
+        {
+            if (buffer.Length < 8)
+            {
+                entry = null;
+                length = 8;
+                return false;
             }
 
+            Span<byte> b = stackalloc byte[4];
+            buffer.CopyTo(b);
+            BinaryPrimitives.TryReadInt32BigEndian(b, out var recordTypeId);
+            buffer.Slice(4, 4).CopyTo(b);
+            BinaryPrimitives.TryReadInt32BigEndian(b, out var contentLength);
+            length = contentLength + 8;
+            if (_idHandlers.TryGetValue(recordTypeId, out var handler))
+            {
+                var contentBuffer = buffer.Slice(8);
+                return handler.TryRead(id, term, recordTypeId,ref contentBuffer , out entry, out _);
 
-            
+            }
+            else
+            {
+                entry = null;
+                return false;
+            }
         }
+
 
         public bool TryWriteContent(ref Span<byte> buffer, LogEntry entry, out int length)
         {
@@ -115,6 +146,8 @@ namespace Stormancer.Raft
         {
             return entry.Record.GetLength() + 8;
         }
+
+       
     }
 
     public interface IIntegerRecordTypeLogEntryFactory
@@ -122,6 +155,8 @@ namespace Stormancer.Raft
         public IEnumerable<(int Id, Type RecordType)> GetMetadata();
 
         public bool TryRead(ulong id, ulong term, int recordType, ReadOnlySequence<byte> buffer, [NotNullWhen(true)] out LogEntry? entry, out int length);
+
+        public bool TryRead(ulong id, ulong term, int recordType, ref ReadOnlySpan<byte> buffer, [NotNullWhen(true)] out LogEntry? entry, out int length);
 
         public bool TryWriteContent(ref Span<byte> buffer, LogEntry entry, out int length);
 
@@ -131,38 +166,38 @@ namespace Stormancer.Raft
 
 
 
-    public interface IReplicatedLogEntry<T> where T : IReplicatedLogEntry<T>
-    {
+    //public interface IReplicatedLogEntry<T> where T : IReplicatedLogEntry<T>
+    //{
 
-        int GetLength();
-        bool TryWrite(Span<byte> buffer, out int length);
-
-
-        ulong Id { get; }
-
-        ulong Term { get; }
-
-        ReplicatedLogEntryType Type { get; }
+    //    int GetLength();
+    //    bool TryWrite(Span<byte> buffer, out int length);
 
 
+    //    ulong Id { get; }
 
-        /// <summary>
-        /// If the entry is of type ClusterConfiguration, returns the stored <see cref="ShardsConfigurationRecord"/>
-        /// </summary>
-        /// <returns></returns>
-        TContent? As<TContent>() where TContent : IRecord<TContent>;
-        static abstract bool TryRead(ulong id, ulong term, ReadOnlySpan<byte> content, [NotNullWhen(true)] out T? value);
+    //    ulong Term { get; }
+
+    //    ReplicatedLogEntryType Type { get; }
 
 
-        static abstract T CreateSystem<TContent>(ulong id, ulong term, ReplicatedLogEntryType type, IRecord content);
 
-    }
+    //    /// <summary>
+    //    /// If the entry is of type ClusterConfiguration, returns the stored <see cref="ShardsConfigurationRecord"/>
+    //    /// </summary>
+    //    /// <returns></returns>
+    //    TContent? As<TContent>() where TContent : IRecord<TContent>;
+    //    static abstract bool TryRead(ulong id, ulong term, ReadOnlySpan<byte> content, [NotNullWhen(true)] out T? value);
 
-    public interface ISerializedEntry
-    {
-        ulong Id { get; }
-        ulong Term { get; }
 
-        TLogEntry ReadAs<TLogEntry>() where TLogEntry : IReplicatedLogEntry<TLogEntry>;
-    }
+    //    static abstract T CreateSystem<TContent>(ulong id, ulong term, ReplicatedLogEntryType type, IRecord content);
+
+    //}
+
+    //public interface ISerializedEntry
+    //{
+    //    ulong Id { get; }
+    //    ulong Term { get; }
+
+    //    TLogEntry ReadAs<TLogEntry>() where TLogEntry : IReplicatedLogEntry<TLogEntry>;
+    //}
 }
